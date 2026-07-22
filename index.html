@@ -2298,43 +2298,38 @@ async function exportPdf(){
     }
 
     strips.forEach(s => {
-      let rowX = marginX;
       const rowH = s.height;
-      if(y + rowH > pageBottom){ doc.addPage('a4', orientation); y = marginTop; }
+
+      // Наклейки режутся целой полоской на ряд, а не по отдельности — поэтому
+      // здесь один чёткий прямоугольный (без скруглений) контур на всю
+      // полоску вместо рамки на каждый блок, и без линий реза между блоками.
+      // Перенос на новую визуальную "линию" внутри ряда оставлен как
+      // страховка на случай, если ряд не влезает даже в альбомный лист.
+      const lines = [];
+      let curLine = [];
+      let curW = 0;
       s.blocks.forEach(b => {
-        if(rowX + b.width > marginX + pageWidth){
-          rowX = marginX; y += rowH + 2;
-          if(y + rowH > pageBottom){ doc.addPage('a4', orientation); y = marginTop; }
+        if(curLine.length && curW + b.width > pageWidth){
+          lines.push(curLine);
+          curLine = [];
+          curW = 0;
         }
+        curLine.push(b);
+        curW += b.width;
+      });
+      if(curLine.length) lines.push(curLine);
 
-        doc.setFillColor(255,255,255);
-        const bs = b.borderStyle || 'solid';
-        if(bs === 'none'){
-          doc.roundedRect(rowX, y, b.width, rowH, 0.9, 0.9, 'F');
-        } else if(bs === 'thick'){
-          doc.setDrawColor(170,170,176);
-          doc.setLineWidth(0.45);
-          doc.setLineDashPattern([],0);
-          doc.roundedRect(rowX, y, b.width, rowH, 0.9, 0.9, 'FD');
-        } else if(bs === 'dashed'){
-          doc.setDrawColor(150,150,156);
-          doc.setLineWidth(0.18);
-          doc.setLineDashPattern([1.2,0.8],0);
-          doc.roundedRect(rowX, y, b.width, rowH, 0.9, 0.9, 'FD');
-          doc.setLineDashPattern([],0);
-        } else if(bs === 'double'){
-          doc.setDrawColor(190,190,194);
-          doc.setLineWidth(0.15);
-          doc.roundedRect(rowX, y, b.width, rowH, 0.9, 0.9, 'FD');
-          doc.setLineWidth(0.15);
-          doc.roundedRect(rowX+0.8, y+0.8, b.width-1.6, rowH-1.6, 0.5, 0.5, 'D');
-        } else {
-          doc.setDrawColor(225,225,229);
-          doc.setLineWidth(0.15);
-          doc.setLineDashPattern([],0);
-          doc.roundedRect(rowX, y, b.width, rowH, 0.9, 0.9, 'FD');
-        }
+      lines.forEach(lineBlocks => {
+        if(y + rowH > pageBottom){ doc.addPage('a4', orientation); y = marginTop; }
+        const lineWidth = lineBlocks.reduce((sum,b) => sum + b.width, 0);
+        let rowX = marginX;
 
+        doc.setDrawColor(20,20,20);
+        doc.setLineWidth(0.5);
+        doc.setLineDashPattern([],0);
+        doc.rect(rowX, y, lineWidth, rowH);
+
+        lineBlocks.forEach(b => {
         const phaseKeys = (b.phases || ['none']).filter(k => k !== 'none');
         if(phaseKeys.length){
           const thickness = b.phaseThickness || 'medium';
@@ -2353,17 +2348,6 @@ async function exportPdf(){
               doc.rect(segX, y+rowH-barH, segW, barH, 'F');
             }
           });
-        }
-
-        // линия реза — тонкая пунктирная вертикальная линия справа от блока (кроме последнего)
-        const bidx = s.blocks.indexOf(b);
-        if(bidx < s.blocks.length - 1){
-          doc.setDrawColor(190,190,195);
-          doc.setLineWidth(0.12);
-          doc.setLineDashPattern([0.8,0.6],0);
-          const cutX = rowX + b.width + GAP/2;
-          doc.line(cutX, y + 1, cutX, y + rowH - 1);
-          doc.setLineDashPattern([],0);
         }
 
         if(b.poles > 1){
@@ -2418,9 +2402,10 @@ async function exportPdf(){
           doc.text(sub, rowX + b.width/2, y + rowH - 1.4, {align:'center'});
         }
 
-        rowX += b.width + GAP;
-      });
+        rowX += b.width;
+        });
       y += rowH + 5;
+      });
     });
 
     const safeName = (projectName || 'Без названия').replace(/[\\/:*?"<>|]/g, '').trim() || 'naklejki';
