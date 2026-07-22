@@ -2282,8 +2282,25 @@ async function exportPdf(){
     const doc = new jsPDF({unit:'mm', format:'a4', orientation});
     registerCyrFonts(doc);
     doc.setProperties({title: projectName || 'Без названия'});
-    let y = marginTop;
     const colorMap = {l1:[139,90,43], l2:[26,26,26], l3:[122,122,122], n:[42,95,180]};
+
+    // Фирменные цвета — под цветовую гамму сопроводительных документов по
+    // объекту (совпадают с заливкой шапок в смете): тёмная бирюза для акцентов
+    // (рамка полоски, шапка листа), светлая — доступна для будущих акцентов.
+    const BRAND_DARK = [43,122,120];
+    const BRAND_LIGHT = [58,175,169];
+
+    let headerH = 0;
+    if(projectName && projectName !== 'Без названия'){
+      headerH = 10;
+      doc.setFillColor(BRAND_DARK[0],BRAND_DARK[1],BRAND_DARK[2]);
+      doc.rect(marginX, marginTop, pageWidth, headerH, 'F');
+      doc.setFont('Cyr','bold');
+      doc.setFontSize(11);
+      doc.setTextColor(255,255,255);
+      doc.text(projectName, marginX + pageWidth/2, marginTop + headerH/2 + 1.3, {align:'center'});
+    }
+    let y = marginTop + (headerH ? headerH + 5 : 0);
 
     // подбирает наибольший размер шрифта (не выше base), при котором текст
     // не выходит за пределы доступной высоты внутри наклейки
@@ -2324,7 +2341,7 @@ async function exportPdf(){
         const lineWidth = lineBlocks.reduce((sum,b) => sum + b.width, 0);
         let rowX = marginX;
 
-        doc.setDrawColor(20,20,20);
+        doc.setDrawColor(BRAND_DARK[0],BRAND_DARK[1],BRAND_DARK[2]);
         doc.setLineWidth(0.5);
         doc.setLineDashPattern([],0);
         doc.rect(rowX, y, lineWidth, rowH);
